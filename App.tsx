@@ -5,14 +5,16 @@
  * @format
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import type {PropsWithChildren} from 'react';
 import {
+  Linking,
   SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   useColorScheme,
   View,
 } from 'react-native';
@@ -24,6 +26,26 @@ import {
   LearnMoreLinks,
   ReloadInstructions,
 } from 'react-native/Libraries/NewAppScreen';
+import inAppMessaging from '@react-native-firebase/in-app-messaging';
+import {PermissionsAndroid} from 'react-native';
+import messaging from '@react-native-firebase/messaging';
+import installations from '@react-native-firebase/installations';
+import analytics from '@react-native-firebase/analytics';
+
+// async function bootstrap() {
+//   await inAppMessaging().setMessagesDisplaySuppressed(true);
+// }
+
+async function onSetup() {
+  console.log('isMessagesDisplaySuppressed',inAppMessaging().isMessagesDisplaySuppressed)
+  await inAppMessaging().setMessagesDisplaySuppressed(false)
+  .then(val => {
+    console.log('isMessagesDisplaySuppressed',inAppMessaging().isMessagesDisplaySuppressed)
+  })
+  .catch(err => {
+    console.log('error here', err);
+  });
+}
 
 type SectionProps = PropsWithChildren<{
   title: string;
@@ -58,6 +80,73 @@ function Section({children, title}: SectionProps): React.JSX.Element {
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
 
+  useEffect(() => {
+    const unsubscribe = messaging().onMessage(async remoteMessage => {
+      console.log('Received foreground message:', remoteMessage);
+      const customData = remoteMessage.data; // Custom data from the message
+      console.log('Custom Data 1:', customData);
+    });
+  
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    // Handle background messages
+    const unsubscribeOnNotificationOpened = messaging().onNotificationOpenedApp(remoteMessage => {
+      console.log('Notification caused app to open from background:', remoteMessage.notification);
+      const customData = remoteMessage.data; // Custom data from the message
+      console.log('Custom Data: 2', customData);
+    });
+  
+    // Check if the app was opened from a killed state
+    const checkInitialNotification = async () => {
+      const initialNotification = await messaging().getInitialNotification();
+      if (initialNotification) {
+        console.log('Notification caused app to open from a quit state:', initialNotification.notification);
+        const customData = initialNotification.data; // Custom data from the message
+        console.log('Custom Data: 3', customData);
+      }
+    };
+  
+    checkInitialNotification();
+  
+    // Cleanup
+    return () => {
+      unsubscribeOnNotificationOpened();
+    };
+  }, []);
+
+  useEffect(() => {
+    Linking.addEventListener('url', ({ url }) => {
+      console.log('URL Deeplink: ', url);
+    });
+
+    const initializeMessaging = async () => {
+      await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      await messaging().registerDeviceForRemoteMessages();
+
+      // Get FCM token and Installation ID
+      const token = await messaging().getToken();
+      const installationId = await installations().getId();
+
+      console.log('FCM Token:', token);
+      console.log('Installation ID:', installationId);
+      // Bootstrap and setup In-App Messaging
+      // await bootstrap();
+      analytics().logAppOpen().then((val) => {
+        console.log('Log APP: ', val);
+      });
+
+      setTimeout(() => {
+        onSetup();
+      }, 1000);
+    };
+
+    messaging().app.analytics().setUserId('239110').then(() => {
+      initializeMessaging();
+    });
+  }, []);
+
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
@@ -71,6 +160,19 @@ function App(): React.JSX.Element {
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         style={backgroundStyle}>
+        <TouchableOpacity
+          onPress={() => {
+            analytics().logEvent('should_trigger_in_app').then((val) => {
+              console.log('success send event');
+            });
+          }}
+          style={{
+            backgroundColor: '#9dd1ab',
+            padding: 12,
+          }}
+        >
+          <Text>Send APP_OPEN</Text>
+        </TouchableOpacity>
         <Header />
         <View
           style={{

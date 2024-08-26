@@ -10,6 +10,11 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-firebase/analytics": "^20.4.0",
+    "@react-native-firebase/app": "^20.4.0",
+    "@react-native-firebase/in-app-messaging": "^20.4.0",
+    "@react-native-firebase/installations": "^20.4.0",
+    "@react-native-firebase/messaging": "^20.4.0",
     "react": "18.2.0",
     "react-native": "0.73.9"
   },
